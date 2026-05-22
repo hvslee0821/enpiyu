@@ -43,17 +43,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
   const [isSliderOpen, setIsSliderOpen] = useState(false);
   const [imagesLoaded, setImagesLoaded] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [showOtpStep, setShowOtpStep] = useState(false);
-  const [otpInput, setOtpInput] = useState('');
-  const [otpError, setOtpError] = useState('');
-  const [otpVerifying, setOtpVerifying] = useState(false);
-  const [isVerified, setIsVerified] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('cardVerified') === 'true';
-    }
-    return false;
-  });
-  const pendingFormDataRef = useRef<{ formData: FormData } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [text1, setText1] = useState<string>('');
   const [text2, setText2] = useState<string>('');
@@ -253,14 +243,12 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     }
   }, [text5, datesInitialized]);
 
-  // Load card data: single JSON (cardData) with hash; verify hash and optional server signature
+  // Load card data from localStorage
   useEffect(() => {
-    const clearCardDataAndSignature = () => {
+    const clearCardData = () => {
       localStorage.removeItem(CARD_DATA_KEY);
-      localStorage.removeItem('cardSignature');
       localStorage.removeItem('uploadedImage');
       ['text1', 'text2', 'text3', 'text4', 'text5', 'text6', 'text7', 'text8', 'userName'].forEach((k) => localStorage.removeItem(k));
-      sessionStorage.removeItem('cardVerified');
       setUploadedImage(null);
       setText1('');
       setText2('');
@@ -269,7 +257,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
       setText5('');
       setText7('');
       setText8('');
-      setIsVerified(false);
       const firstDigit = Math.floor(Math.random() * 4) + 4;
       const remainingDigits = Array.from({ length: 11 }, () => Math.floor(Math.random() * 10)).join('');
       const newNumber = `${firstDigit}${remainingDigits}`;
@@ -329,19 +316,18 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     };
 
     const cardDataStr = typeof window !== 'undefined' ? localStorage.getItem(CARD_DATA_KEY) : null;
-    const cardSignature = typeof window !== 'undefined' ? localStorage.getItem('cardSignature') : null;
 
     if (cardDataStr) {
       let parsed: { payload?: CardPayload; hash?: string };
       try {
         parsed = JSON.parse(cardDataStr);
       } catch {
-        clearCardDataAndSignature();
+        clearCardData();
         return;
       }
       const { payload, hash } = parsed;
       if (!payload || typeof payload !== 'object' || !hash || typeof hash !== 'string') {
-        clearCardDataAndSignature();
+        clearCardData();
         return;
       }
       const normalized: CardPayload = {
@@ -359,26 +345,12 @@ export default function App({ currentPage, onNavigate }: AppProps) {
       sha256Hex(canonicalPayloadString(normalized))
         .then((computedHash) => {
           if (computedHash !== hash) {
-            clearCardDataAndSignature();
+            clearCardData();
             return;
           }
-          if (cardSignature) {
-            fetch('/api/cards/validate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ payload: normalized, signature: cardSignature }),
-            })
-              .then((res) => res.json())
-              .then((data) => {
-                if (!data.valid) clearCardDataAndSignature();
-                else applyPayloadToState(normalized);
-              })
-              .catch(() => clearCardDataAndSignature());
-          } else {
-            applyPayloadToState(normalized);
-          }
+          applyPayloadToState(normalized);
         })
-        .catch(() => clearCardDataAndSignature());
+        .catch(() => clearCardData());
     } else {
       loadLegacy();
     }
@@ -625,91 +597,29 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     };
   };
 
-  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    setOtpInput('');
-    setOtpError('');
-    pendingFormDataRef.current = { formData };
-    setShowOtpStep(true);
-  };
-
-  const handleOtpVerify = async () => {
-    setOtpError('');
-    const code = otpInput.trim().replace(/\D/g, '');
-    if (code.length !== 6) {
-      setOtpError('6 оронтой код оруулна уу');
-      return;
-    }
-    setOtpVerifying(true);
+    setIsSaving(true);
     try {
-      const res = await fetch('/api/codes/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.valid) {
-        if (res.status === 429) {
-          setOtpError('Олон удаа оролдлоо. Түр хүлээнэ үү.');
-          return;
-        }
-        setOtpError(data.error === 'Code not found or already used' ? 'Код олдсонгүй эсвэл аль хэдийн ашиглагдсан' : 'Буруу код');
-        return;
-      }
-      if (pendingFormDataRef.current) {
-        const { formData } = pendingFormDataRef.current;
-        pendingFormDataRef.current = null;
-        const payload = await buildPayloadFromForm(formData, text6, userName, uploadedImage);
-        applyPendingFormData(formData);
-        if (typeof window !== 'undefined') {
-          const hash = await sha256Hex(canonicalPayloadString(payload));
-          localStorage.setItem(CARD_DATA_KEY, JSON.stringify({ payload, hash }));
-          if (data.signToken) {
-            const signRes = await fetch('/api/cards/sign', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ signToken: data.signToken, payload }),
-            });
-            const signData = await signRes.json();
-            if (signRes.ok && signData.signature) {
-              localStorage.setItem('cardSignature', signData.signature);
-            }
-          }
-        }
-      }
-      setIsVerified(true);
+      const formData = new FormData(e.currentTarget);
+      const payload = await buildPayloadFromForm(formData, text6, userName, uploadedImage);
+      applyPendingFormData(formData);
       if (typeof window !== 'undefined') {
-        sessionStorage.setItem('cardVerified', 'true');
+        const hash = await sha256Hex(canonicalPayloadString(payload));
+        localStorage.setItem(CARD_DATA_KEY, JSON.stringify({ payload, hash }));
       }
-      setShowOtpStep(false);
       setIsFormOpen(false);
-      setOtpInput('');
-    } catch {
-      setOtpError('Холболт амжилтгүй');
     } finally {
-      setOtpVerifying(false);
+      setIsSaving(false);
     }
-  };
-
-  const handleOtpBack = () => {
-    setShowOtpStep(false);
-    setOtpInput('');
-    setOtpError('');
-    pendingFormDataRef.current = null;
   };
 
   const handleFormBackdropClick = () => {
     setIsFormOpen(false);
-    setShowOtpStep(false);
-    setOtpInput('');
-    setOtpError('');
-    pendingFormDataRef.current = null;
   };
 
   const handleDeleteData = () => {
     localStorage.removeItem(CARD_DATA_KEY);
-    localStorage.removeItem('cardSignature');
     localStorage.removeItem('uploadedImage');
     ['text1', 'text2', 'text3', 'text4', 'text5', 'text6', 'text7', 'text8', 'userName'].forEach((k) => localStorage.removeItem(k));
 
@@ -730,12 +640,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     setText6(newNumber);
     localStorage.setItem('text6', newNumber);
 
-    setIsVerified(false);
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('cardVerified');
-    }
-    setShowOtpStep(false);
-    pendingFormDataRef.current = null;
     setIsFormOpen(false);
   };
 
@@ -1364,54 +1268,12 @@ export default function App({ currentPage, onNavigate }: AppProps) {
         onClick={handleFormBackdropClick}
       >
 
-        {/* Form or OTP step */}
         <div
           className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-2xl p-6 w-11/12 max-w-md z-[81]"
           onClick={(e) => e.stopPropagation()}
         >
-          {showOtpStep ? (
-            <>
-              <h2 className="text-2xl font-semibold mb-2 text-gray-800">Нэг удаагийн код</h2>
-              <p className="text-sm text-gray-600 mb-4">
-                6 оронтой идэвхтэй кодыг оруулна уу.
-              </p>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={otpInput}
-                onChange={(e) => {
-                  const v = e.target.value.replace(/\D/g, '').slice(0, 6);
-                  setOtpInput(v);
-                  setOtpError('');
-                }}
-                placeholder="000000"
-                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-lg tracking-[0.5em] font-mono"
-                autoFocus
-              />
-              {otpError && <p className="text-red-500 text-sm mt-2">{otpError}</p>}
-              <div className="flex gap-3 mt-4">
-                <button
-                  type="button"
-                  onClick={handleOtpBack}
-                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-                >
-                  Буцах
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOtpVerify}
-                  disabled={otpVerifying}
-                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 transition-colors"
-                >
-                  {otpVerifying ? 'Шалгаж байна…' : 'Баталгаажуулах'}
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <h2 className="text-2xl font-semibold mb-4 text-gray-800">Customize Card</h2>
-              <form onSubmit={handleFormSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto">
+          <h2 className="text-2xl font-semibold mb-4 text-gray-800">Customize Card</h2>
+          <form onSubmit={handleFormSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto">
                 <div>
                   <label htmlFor="uploadedImage" className="block text-sm font-medium text-gray-700 mb-2">
                     Upload Image (10px left, 54px top)
@@ -1498,9 +1360,10 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                      disabled={isSaving}
+                      className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 transition-colors"
                     >
-                      Ашиглах
+                      {isSaving ? 'Хадгалж байна…' : 'Ашиглах'}
                     </button>
                   </div>
                   <button
@@ -1512,8 +1375,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                   </button>
                 </div>
               </form>
-            </>
-          )}
         </div>
       </div>
     </>

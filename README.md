@@ -7,6 +7,7 @@ A mobile-only Next.js application for creating and customizing ID cards.
 - Mobile-only app (desktop access blocked)
 - Customizable ID cards with text fields and image uploads
 - Card carousel on profile page
+- No backend required — fill the form and data saves in browser localStorage
 - Persistent data storage with localStorage
 - PWA support with homescreen installation
 - Responsive design for small screens (≤370px)
@@ -79,8 +80,9 @@ docker run -p 3000:3000 e-mongolla
 
 ## Requirements
 
-- Node.js 18+ 
+- Node.js 18+
 - npm/yarn/pnpm
+- No database or API keys needed
 
 ## Project Structure
 
