@@ -64,6 +64,13 @@ export default function App({ currentPage, onNavigate }: AppProps) {
   const [text8, setText8] = useState<string>('');
   const [datesInitialized, setDatesInitialized] = useState(false);
 
+  // Pull to reload states
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pullStartY, setPullStartY] = useState(0);
+  const [pullProgress, setPullProgress] = useState(0);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+
   const formatDate = (dateString: string): string => {
     if (!dateString) return '';
     const parts = dateString.split('-');
@@ -401,6 +408,69 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     };
   }, [currentPage, imagesLoaded]);
 
+  // Pull to refresh handlers
+  useEffect(() => {
+    if (currentPage !== 'profile') return;
+
+    const content = contentRef.current;
+    if (!content) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // Only trigger if at the top of the page and not already refreshing
+      if (content.scrollTop === 0 && !isRefreshing) {
+        pullStartY = e.touches[0].clientY;
+        isDraggingRef.current = true;
+        setPullProgress(0);
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDraggingRef.current || isRefreshing) return;
+      
+      const currentY = e.touches[0].clientY;
+      const pullDistance = currentY - pullStartY;
+      
+      if (pullDistance > 0 && content.scrollTop === 0) {
+        e.preventDefault();
+        // Calculate progress (max 1 at 80px pull)
+        const progress = Math.min(pullDistance / 80, 1);
+        setPullProgress(progress);
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (!isDraggingRef.current || isRefreshing) {
+        isDraggingRef.current = false;
+        return;
+      }
+      
+      if (pullProgress >= 0.8) {
+        // Trigger refresh
+        setIsRefreshing(true);
+        setPullProgress(0);
+        
+        // Simulate reload (hide content, wait, then show)
+        setTimeout(() => {
+          setIsRefreshing(false);
+        }, 1000);
+      } else {
+        setPullProgress(0);
+      }
+      
+      isDraggingRef.current = false;
+    };
+
+    content.addEventListener('touchstart', handleTouchStart, { passive: false });
+    content.addEventListener('touchmove', handleTouchMove, { passive: false });
+    content.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      content.removeEventListener('touchstart', handleTouchStart);
+      content.removeEventListener('touchmove', handleTouchMove);
+      content.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [currentPage, isRefreshing, pullProgress]);
+
   const handleScreenClick = () => {
     if (currentPage === 'profile') {
       setIsSliderOpen(true);
@@ -726,145 +796,265 @@ export default function App({ currentPage, onNavigate }: AppProps) {
           />
         )}
 
-        {/* Page content */}
+        {/* Page content with pull-to-refresh wrapper */}
         <div
+          ref={contentRef}
           className={`min-h-screen ${currentPage === 'profile' ? 'bg-transparent' : 'bg-gray-50'} ${currentPage === 'profile' ? 'pt-5' : ''}`}
           style={{
             ...(currentPage !== 'profile' && headerHeight > 0 ? { paddingTop: `${headerHeight}px` } : currentPage !== 'profile' ? { paddingTop: '80px' } : {}),
             ...(currentPage === 'qr' ? { overflow: 'hidden', height: '100vh' } : {}),
             ...(currentPage === 'additional' ? { overflow: 'hidden', paddingBottom: 'calc(60px + env(safe-area-inset-bottom))' } : {}),
             contain: 'layout style paint',
+            ...(currentPage === 'profile' ? { overflowY: 'auto', WebkitOverflowScrolling: 'touch' } : {}),
           }}
         >
-          <div className={`relative w-full ${currentPage === 'profile' ? 'pt-0' : ''}`}>
-            {/* Page image - with bottom padding */}
+          {/* Pull to refresh indicator */}
+          {currentPage === 'profile' && (
             <div
-              className={`relative w-full pb-4`}
+              className="absolute left-0 right-0 flex justify-center transition-all duration-200 z-20"
               style={{
-                ...(currentPage === 'qr' ? { overflow: 'hidden', height: '100vh' } : {}),
-                ...(currentPage === 'additional' ? { overflow: 'hidden' } : {}),
+                top: isRefreshing ? '60px' : `${-40 + (pullProgress * 40)}px`,
+                opacity: isRefreshing ? 1 : pullProgress,
+                transform: `scale(${isRefreshing ? 1 : 0.8 + pullProgress * 0.2})`,
               }}
             >
-              <Image
-                key={currentPage}
-                src={currentImage}
-                alt={currentPage}
-                width={1920}
-                height={1080}
-                className="w-full h-auto object-cover"
+              <div className="bg-white rounded-full shadow-md px-4 py-2 flex items-center gap-2">
+                <svg
+                  className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="#005fef"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                <span className="text-sm text-gray-600">
+                  {isRefreshing ? 'Хуудас шинэчлэгдэж байна...' : 'Татаж шинэчлэх'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Content wrapper with fade animation */}
+          <div
+            className="transition-opacity duration-300"
+            style={{
+              opacity: isRefreshing ? 0 : 1,
+              pointerEvents: isRefreshing ? 'none' : 'auto',
+            }}
+          >
+            <div className={`relative w-full ${currentPage === 'profile' ? 'pt-0' : ''}`}>
+              {/* Page image - with bottom padding */}
+              <div
+                className={`relative w-full pb-4`}
                 style={{
-                  width: '100%',
-                  height: 'auto',
-                  ...(currentPage === 'qr' ? { height: '100vh', objectFit: 'cover' } : {}),
-                  ...(currentPage === 'additional' ? { height: 'auto', maxHeight: 'calc(100vh - env(safe-area-inset-bottom) - 60px)', objectFit: 'contain' } : {}),
+                  ...(currentPage === 'qr' ? { overflow: 'hidden', height: '100vh' } : {}),
+                  ...(currentPage === 'additional' ? { overflow: 'hidden' } : {}),
                 }}
-                priority={true}
-                unoptimized
-                loading="eager"
-              />
-              {/* Circular cropped image in top left corner */}
-              {currentPage === 'profile' && (
-                <div
-                  className="absolute z-10 rounded-full overflow-hidden"
+              >
+                <Image
+                  key={currentPage}
+                  src={currentImage}
+                  alt={currentPage}
+                  width={1920}
+                  height={1080}
+                  className="w-full h-auto object-cover"
                   style={{
-                    top: '4.5%',
-                    left: '8%',
-                    width: '14%',
-                    height: '5%',
-                    backgroundColor: '#fff',
-                    backgroundImage: uploadedImage ? `url(${uploadedImage})` : `url('/card.jpg')`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    backgroundRepeat: 'no-repeat',
-                    filter: 'blur(4px)'
+                    width: '100%',
+                    height: 'auto',
+                    ...(currentPage === 'qr' ? { height: '100vh', objectFit: 'cover' } : {}),
+                    ...(currentPage === 'additional' ? { height: 'auto', maxHeight: 'calc(100vh - env(safe-area-inset-bottom) - 60px)', objectFit: 'contain' } : {}),
                   }}
+                  priority={true}
+                  unoptimized
+                  loading="eager"
                 />
-              )}
-              {/* O.NAME text on profile page */}
-              {currentPage === 'profile' && (
-                <div
-                  className="absolute z-10"
-                  style={{
-                    top: '5%',
-                    left: '24%',
-                    fontSize: '1rem',
-                    fontWeight: 700,
-                    color: '#2D7DEF',
-                    fontFamily: 'Montserrat, sans-serif',
-                  }}
-                >
-                  {text2 && text3 ? `${text2.charAt(0)}.${text3}` : text2 && text2.length > 0 ? `${text2.charAt(0)}.` : `O.${userName}`}
-                </div>
-              )}
-              {/* Card carousel on profile page - positioned lower */}
-              {currentPage === 'profile' && (
-                <div
-                  className="absolute left-1/2 transform -translate-x-1/2 z-10"
-                  style={{ top: '14%', width: '100%' }}
-                >
-                  <div className="overflow-hidden" ref={emblaRef} style={{ paddingTop: '8%', paddingBottom: '8%' }}>
-                    <div className="flex" style={{ gap: '-20%', paddingLeft: '10%', paddingRight: '10%' }}>
-                      {[...Array(9)].map((_, index) => (
-                        <div
-                          key={index}
-                          className="min-w-0 relative flex-shrink-0"
-                          onClick={selectedIndex === index ? handleScreenClick : undefined}
-                          onMouseDown={selectedIndex === index ? () => setIsCenterCardPressed(true) : undefined}
-                          onMouseUp={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
-                          onMouseLeave={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
-                          onTouchStart={selectedIndex === index ? () => setIsCenterCardPressed(true) : undefined}
-                          onTouchEnd={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
-                          style={{
-                            width: isSmallScreen ? '200px' : '246.15px',
-                            transform: selectedIndex === index ? 'scale3d(1.3, 1.3, 1)' : 'scale3d(0.9, 0.9, 1)',
-                            opacity: isCenterCardPressed && selectedIndex === index ? 0.6 : 1,
-                            zIndex: selectedIndex === index ? 10 : 1,
-                            marginLeft: index > 0 ? (isSmallScreen ? '-39px' : '-48px') : '0',
-                            transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.1s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                            willChange: 'transform',
-                            backfaceVisibility: 'hidden',
-                            WebkitBackfaceVisibility: 'hidden',
-                            cursor: selectedIndex === index ? 'pointer' : 'default',
-                          }}
-                        >
-                          <div className="relative w-full" style={{ width: '100%', height: 'auto' }}>
-                            <Image
-                              src="/card.jpg"
-                              alt="Card"
-                              width={1920}
-                              height={1080}
-                              className="w-full h-auto object-cover"
-                              style={{ width: '100%', height: 'auto', borderRadius: '10px' }}
-                              priority={index === 4}
-                              loading={index === 4 ? 'eager' : 'lazy'}
-                              unoptimized
-                            />
-                            {(() => {
-                              const scale = isSmallScreen ? 0.813 : 1; // 200/246.15
-                              return (
-                                <>
-                                  {/* Uploaded image overlay - positions scaled for base card */}
-                                  {uploadedImage && (
-                                    <img
-                                      src={uploadedImage}
-                                      alt="Uploaded"
-                                      style={{
-                                        position: 'absolute',
-                                        left: `${7.69 * scale}px`,
-                                        top: `${41.5 * scale}px`,
-                                        width: `${51.5 * scale}px`,
-                                        height: 'auto',
-                                        objectFit: 'contain',
-                                      }}
-                                    />
-                                  )}
-                                  {/* Text overlays */}
-                                  {text1 && (
+                {/* Circular cropped image in top left corner */}
+                {currentPage === 'profile' && (
+                  <div
+                    className="absolute z-10 rounded-full overflow-hidden"
+                    style={{
+                      top: '4.5%',
+                      left: '8%',
+                      width: '14%',
+                      height: '5%',
+                      backgroundColor: '#fff',
+                      backgroundImage: uploadedImage ? `url(${uploadedImage})` : `url('/card.jpg')`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      backgroundRepeat: 'no-repeat',
+                      filter: 'blur(4px)'
+                    }}
+                  />
+                )}
+                {/* O.NAME text on profile page */}
+                {currentPage === 'profile' && (
+                  <div
+                    className="absolute z-10"
+                    style={{
+                      top: '5%',
+                      left: '24%',
+                      fontSize: '1rem',
+                      fontWeight: 700,
+                      color: '#2D7DEF',
+                      fontFamily: 'Montserrat, sans-serif',
+                    }}
+                  >
+                    {text2 && text3 ? `${text2.charAt(0)}.${text3}` : text2 && text2.length > 0 ? `${text2.charAt(0)}.` : `O.${userName}`}
+                  </div>
+                )}
+                {/* Card carousel on profile page - positioned lower */}
+                {currentPage === 'profile' && (
+                  <div
+                    className="absolute left-1/2 transform -translate-x-1/2 z-10"
+                    style={{ top: '14%', width: '100%' }}
+                  >
+                    <div className="overflow-hidden" ref={emblaRef} style={{ paddingTop: '8%', paddingBottom: '8%' }}>
+                      <div className="flex" style={{ gap: '-20%', paddingLeft: '10%', paddingRight: '10%' }}>
+                        {[...Array(9)].map((_, index) => (
+                          <div
+                            key={index}
+                            className="min-w-0 relative flex-shrink-0"
+                            onClick={selectedIndex === index ? handleScreenClick : undefined}
+                            onMouseDown={selectedIndex === index ? () => setIsCenterCardPressed(true) : undefined}
+                            onMouseUp={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
+                            onMouseLeave={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
+                            onTouchStart={selectedIndex === index ? () => setIsCenterCardPressed(true) : undefined}
+                            onTouchEnd={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
+                            style={{
+                              width: isSmallScreen ? '200px' : '246.15px',
+                              transform: selectedIndex === index ? 'scale3d(1.3, 1.3, 1)' : 'scale3d(0.9, 0.9, 1)',
+                              opacity: isCenterCardPressed && selectedIndex === index ? 0.6 : 1,
+                              zIndex: selectedIndex === index ? 10 : 1,
+                              marginLeft: index > 0 ? (isSmallScreen ? '-39px' : '-48px') : '0',
+                              transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.1s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                              willChange: 'transform',
+                              backfaceVisibility: 'hidden',
+                              WebkitBackfaceVisibility: 'hidden',
+                              cursor: selectedIndex === index ? 'pointer' : 'default',
+                            }}
+                          >
+                            <div className="relative w-full" style={{ width: '100%', height: 'auto' }}>
+                              <Image
+                                src="/card.jpg"
+                                alt="Card"
+                                width={1920}
+                                height={1080}
+                                className="w-full h-auto object-cover"
+                                style={{ width: '100%', height: 'auto', borderRadius: '10px' }}
+                                priority={index === 4}
+                                loading={index === 4 ? 'eager' : 'lazy'}
+                                unoptimized
+                              />
+                              {(() => {
+                                const scale = isSmallScreen ? 0.813 : 1; // 200/246.15
+                                return (
+                                  <>
+                                    {/* Uploaded image overlay - positions scaled for base card */}
+                                    {uploadedImage && (
+                                      <img
+                                        src={uploadedImage}
+                                        alt="Uploaded"
+                                        style={{
+                                          position: 'absolute',
+                                          left: `${7.69 * scale}px`,
+                                          top: `${41.5 * scale}px`,
+                                          width: `${51.5 * scale}px`,
+                                          height: 'auto',
+                                          objectFit: 'contain',
+                                        }}
+                                      />
+                                    )}
+                                    {/* Text overlays */}
+                                    {text1 && (
+                                      <div
+                                        style={{
+                                          position: 'absolute',
+                                          left: `${68 * scale}px`,
+                                          top: `${38.43 * scale}px`,
+                                          color: '#000',
+                                          fontSize: `${6 * scale}px`,
+                                          fontFamily: 'Montserrat, sans-serif',
+                                          fontWeight: 350,
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {text1}
+                                      </div>
+                                    )}
+                                    {text2 && (
+                                      <div
+                                        style={{
+                                          position: 'absolute',
+                                          left: `${68 * scale}px`,
+                                          top: `${56.7 * scale}px`,
+                                          color: '#000',
+                                          fontSize: `${6 * scale}px`,
+                                          fontFamily: 'Montserrat, sans-serif',
+                                          fontWeight: 350,
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {text2}
+                                      </div>
+                                    )}
+                                    {text3 && (
+                                      <div
+                                        style={{
+                                          position: 'absolute',
+                                          left: `${68 * scale}px`,
+                                          top: `${75 * scale}px`,
+                                          color: '#000',
+                                          fontSize: `${6 * scale}px`,
+                                          fontFamily: 'Montserrat, sans-serif',
+                                          fontWeight: 350,
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {text3}
+                                      </div>
+                                    )}
+                                    {text4 && (
+                                      <div
+                                        style={{
+                                          position: 'absolute',
+                                          left: `${68 * scale}px`,
+                                          top: `${92.5 * scale}px`,
+                                          color: '#000',
+                                          fontSize: `${6 * scale}px`,
+                                          fontFamily: 'Montserrat, sans-serif',
+                                          fontWeight: 350,
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {text4}
+                                      </div>
+                                    )}
+                                    {text5 && (
+                                      <div
+                                        style={{
+                                          position: 'absolute',
+                                          left: `${68 * scale}px`,
+                                          top: `${119.13 * scale}px`,
+                                          color: '#000',
+                                          fontSize: `${6 * scale}px`,
+                                          fontFamily: 'Montserrat, sans-serif',
+                                          fontWeight: 350,
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {formatDate(text5)}
+                                      </div>
+                                    )}
                                     <div
                                       style={{
                                         position: 'absolute',
                                         left: `${68 * scale}px`,
-                                        top: `${38.43 * scale}px`,
+                                        top: `${136.04 * scale}px`,
                                         color: '#000',
                                         fontSize: `${6 * scale}px`,
                                         fontFamily: 'Montserrat, sans-serif',
@@ -872,109 +1062,31 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                                         whiteSpace: 'nowrap',
                                       }}
                                     >
-                                      {text1}
+                                      {text6}
                                     </div>
-                                  )}
-                                  {text2 && (
-                                    <div
-                                      style={{
-                                        position: 'absolute',
-                                        left: `${68 * scale}px`,
-                                        top: `${56.7 * scale}px`,
-                                        color: '#000',
-                                        fontSize: `${6 * scale}px`,
-                                        fontFamily: 'Montserrat, sans-serif',
-                                        fontWeight: 350,
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {text2}
-                                    </div>
-                                  )}
-                                  {text3 && (
-                                    <div
-                                      style={{
-                                        position: 'absolute',
-                                        left: `${68 * scale}px`,
-                                        top: `${75 * scale}px`,
-                                        color: '#000',
-                                        fontSize: `${6 * scale}px`,
-                                        fontFamily: 'Montserrat, sans-serif',
-                                        fontWeight: 350,
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {text3}
-                                    </div>
-                                  )}
-                                  {text4 && (
-                                    <div
-                                      style={{
-                                        position: 'absolute',
-                                        left: `${68 * scale}px`,
-                                        top: `${92.5 * scale}px`,
-                                        color: '#000',
-                                        fontSize: `${6 * scale}px`,
-                                        fontFamily: 'Montserrat, sans-serif',
-                                        fontWeight: 350,
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {text4}
-                                    </div>
-                                  )}
-                                  {text5 && (
-                                    <div
-                                      style={{
-                                        position: 'absolute',
-                                        left: `${68 * scale}px`,
-                                        top: `${119.13 * scale}px`,
-                                        color: '#000',
-                                        fontSize: `${6 * scale}px`,
-                                        fontFamily: 'Montserrat, sans-serif',
-                                        fontWeight: 350,
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {formatDate(text5)}
-                                    </div>
-                                  )}
-                                  <div
-                                    style={{
-                                      position: 'absolute',
-                                      left: `${68 * scale}px`,
-                                      top: `${136.04 * scale}px`,
-                                      color: '#000',
-                                      fontSize: `${6 * scale}px`,
-                                      fontFamily: 'Montserrat, sans-serif',
-                                      fontWeight: 350,
-                                      whiteSpace: 'nowrap',
-                                    }}
-                                  >
-                                    {text6}
-                                  </div>
-                                </>
-                              );
-                            })()}
+                                  </>
+                                );
+                              })()}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-              {/* Hidden login button at the bottom of profile page */}
-              {currentPage === 'profile' && (
-                <button
-                  onClick={handleLoginButtonClick}
-                  className="absolute left-1/2 transform -translate-x-1/2 w-100 h-15 cursor-pointer rounded-md opacity-0 z-40"
-                  style={{
-                    bottom: 'calc(1rem + env(safe-area-inset-bottom) + 6rem)',
-                  }}
-                  aria-label="Login"
-                  title="Click to customize card"
-                />
-              )}
+                )}
+                {/* Hidden login button at the bottom of profile page */}
+                {currentPage === 'profile' && (
+                  <button
+                    onClick={handleLoginButtonClick}
+                    className="absolute left-1/2 transform -translate-x-1/2 w-100 h-15 cursor-pointer rounded-md opacity-0 z-40"
+                    style={{
+                      bottom: 'calc(1rem + env(safe-area-inset-bottom) + 6rem)',
+                    }}
+                    aria-label="Login"
+                    title="Click to customize card"
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1380,4 +1492,3 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     </>
   );
 }
-
