@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+*{
+  font: bold ;
+}
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial;
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent body scroll on mobile when footer is fixed */
+html {
+  scroll-behavior: smooth;
+  /* Set the background color for status bar area */
+  background-color: #DFF0FF;
+  /* Extend the viewport under the notch */
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+}
+
+/* Status bar background area */
+html::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  background-color: #DFF0FF;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+html,
+body {
+  height: 100%;
+  position: relative;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  margin: 0;
+  background-color: #DFF0FF;
+}
+
+* {
+  overscroll-behavior: none;
+}
+
+/* Prevent scrolling on QR and Additional pages */
+body.no-scroll {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
+/* Fill active icons */
+.footer-icon-active svg path {
+  fill: currentColor !important;
+  stroke: none !important;
+}
