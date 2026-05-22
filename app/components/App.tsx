@@ -54,7 +54,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('text6');
       if (saved) return saved;
-      const firstDigit = Math.floor(Math.random() * 4) + 4; // 4, 5, 6, or 7
+      const firstDigit = Math.floor(Math.random() * 4) + 4;
       const remainingDigits = Array.from({ length: 11 }, () => Math.floor(Math.random() * 10)).join('');
       return `${firstDigit}${remainingDigits}`;
     }
@@ -98,7 +98,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
       return;
     }
 
-    // Calculate text7: 16 years, 2 months, 10 days after birth date
     const date7 = new Date(date);
     date7.setFullYear(date7.getFullYear() + 16);
     date7.setMonth(date7.getMonth() + 2);
@@ -107,7 +106,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     setText7(text7Value);
     localStorage.setItem('text7', text7Value);
 
-    // Calculate text8: 25 years after text5 (birth date)
     const date8 = new Date(date);
     date8.setFullYear(date8.getFullYear() + 25);
     const text8Value = date8.toISOString().split('T')[0];
@@ -131,7 +129,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
   const carouselInitializedRef = useRef(false);
   const [isSmallScreen, setIsSmallScreen] = useState(false);
 
-  // Detect small screen (370px or smaller)
+  // Detect small screen
   useEffect(() => {
     const checkScreenSize = () => {
       setIsSmallScreen(window.innerWidth <= 370);
@@ -143,7 +141,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
-  // Preload all images with retry logic
+  // Preload all images
   useEffect(() => {
     const imageUrls = [
       '/logo.jpg',
@@ -173,7 +171,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
               loadImage(url, retries - 1).then(resolve).catch(reject);
             }, 500);
           } else {
-            reject(new Error(`Failed to load image: ${url} after ${retries} retries`));
+            reject(new Error(`Failed to load image: ${url}`));
           }
         };
         img.src = url;
@@ -191,23 +189,13 @@ export default function App({ currentPage, onNavigate }: AppProps) {
 
     const loadImages = async () => {
       try {
-        const results = await Promise.allSettled(
-          imageUrls.map(url => loadImage(url))
-        );
-
-        const failed = results.filter(result => result.status === 'rejected');
-
-        if (failed.length > 0) {
-          console.warn('Some images failed to load:', failed.map(f => f.status === 'rejected' ? f.reason : null));
-        }
-
+        await Promise.allSettled(imageUrls.map(url => loadImage(url)));
         setImagesLoaded(true);
-
         setTimeout(() => {
           setIsLoading(false);
         }, 500);
       } catch (error) {
-        console.error('Critical error loading images:', error);
+        console.error('Error loading images:', error);
         setTimeout(() => {
           setIsLoading(false);
         }, 2000);
@@ -225,7 +213,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     };
   }, []);
 
-  // Calculate dates automatically when text5 (birth date) changes
+  // Calculate dates automatically
   useEffect(() => {
     if (!datesInitialized) {
       setDatesInitialized(true);
@@ -435,7 +423,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
         setPullProgress(0);
         setPullDistance(0);
         
-        // Simulate refresh
         setTimeout(() => {
           setIsRefreshing(false);
         }, 1500);
@@ -465,12 +452,9 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     }
   };
 
-  // Preload card image when navigating to profile page
+  // Preload card image
   useEffect(() => {
     if (currentPage === 'profile') {
-      const cardImg = new window.Image();
-      cardImg.src = '/card.jpg';
-
       const link = document.createElement('link');
       link.rel = 'preload';
       link.as = 'image';
@@ -486,7 +470,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     }
   }, [currentPage]);
 
-  // Close slider when navigating away from profile and scroll to top
+  // Close slider when navigating away
   useEffect(() => {
     if (currentPage !== 'profile') {
       setIsSliderOpen(false);
@@ -506,7 +490,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     };
   }, [currentPage]);
 
-  // Reset press state when mouse/touch is released globally
+  // Reset press state
   useEffect(() => {
     const handleMouseUp = () => setIsCenterCardPressed(false);
     const handleTouchEnd = () => setIsCenterCardPressed(false);
@@ -532,7 +516,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     };
   }, []);
 
-  // Handle Embla carousel selection and initialize to 4th slide
+  // Handle Embla carousel
   useEffect(() => {
     if (!emblaApi) return;
 
@@ -548,7 +532,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     };
   }, [emblaApi]);
 
-  // Initialize carousel position only when entering profile page
+  // Initialize carousel position
   useEffect(() => {
     if (currentPage !== 'profile') {
       carouselInitializedRef.current = false;
@@ -762,7 +746,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
           />
         </div>
 
-        {/* Status bar background for profile page */}
+        {/* Status bar background */}
         {currentPage === 'profile' && (
           <div
             className="fixed top-0 left-0 right-0 z-5"
@@ -774,7 +758,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
           />
         )}
 
-        {/* Page content with pull-to-refresh wrapper */}
+        {/* Page content */}
         <div
           ref={contentRef}
           className={`min-h-screen ${currentPage === 'profile' ? 'bg-transparent' : 'bg-gray-50'} ${currentPage === 'profile' ? 'pt-5' : ''}`}
@@ -784,26 +768,23 @@ export default function App({ currentPage, onNavigate }: AppProps) {
             ...(currentPage === 'additional' ? { overflow: 'hidden', paddingBottom: 'calc(60px + env(safe-area-inset-bottom))' } : {}),
             contain: 'layout style paint',
             ...(currentPage === 'profile' ? { overflowY: 'auto', WebkitOverflowScrolling: 'touch' } : {}),
-            transform: isRefreshing ? 'translateY(60px)' : `translateY(${pullDistance}px)`,
-            transition: isRefreshing ? 'transform 0.3s ease-out' : 'transform 0.2s ease-out',
+            transform: isRefreshing ? 'translateY(50px)' : `translateY(${pullDistance}px)`,
+            transition: 'transform 0.3s ease-out',
           }}
         >
-          {/* Loading circle that appears from the top */}
+          {/* Small loading circle from top during pull */}
           {(isRefreshing || pullProgress > 0) && (
             <div
               className="absolute left-0 right-0 flex justify-center z-30"
               style={{
-                top: isRefreshing ? '-50px' : `${-50 + (pullDistance * 0.6)}px`,
-                opacity: isRefreshing ? 1 : Math.min(pullProgress * 2, 1),
+                top: isRefreshing ? '-40px' : `${-40 + (pullDistance * 0.5)}px`,
+                opacity: isRefreshing ? 1 : Math.min(pullProgress * 1.5, 1),
                 transition: 'all 0.2s ease-out',
               }}
             >
-              <div className="bg-white rounded-full shadow-lg p-3">
+              <div className="bg-white rounded-full shadow-md p-2">
                 <svg
-                  className={`w-8 h-8 ${isRefreshing ? 'animate-spin' : ''}`}
-                  style={{
-                    animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
-                  }}
+                  className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`}
                   fill="none"
                   stroke="#005fef"
                   viewBox="0 0 24 24"
@@ -819,11 +800,11 @@ export default function App({ currentPage, onNavigate }: AppProps) {
             </div>
           )}
 
-          {/* Content wrapper - fades and cards replaced with loading circle when refreshing */}
+          {/* Page content - only cards are replaced during refresh */}
           <div
-            className="transition-all duration-300"
+            className="transition-opacity duration-300"
             style={{
-              opacity: isRefreshing ? 0 : 1,
+              opacity: 1,
               pointerEvents: isRefreshing ? 'none' : 'auto',
             }}
           >
@@ -873,7 +854,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                   />
                 )}
                 
-                {/* O.NAME text on profile page */}
+                {/* O.NAME text */}
                 {currentPage === 'profile' && (
                   <div
                     className="absolute z-10"
@@ -890,73 +871,153 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                   </div>
                 )}
                 
-                {/* Card carousel on profile page */}
+                {/* Card carousel - replaced with loading circle when refreshing */}
                 {currentPage === 'profile' && (
                   <div
                     className="absolute left-1/2 transform -translate-x-1/2 z-10"
                     style={{ top: '14%', width: '100%' }}
                   >
-                    <div className="overflow-hidden" ref={emblaRef} style={{ paddingTop: '8%', paddingBottom: '8%' }}>
-                      <div className="flex" style={{ gap: '-20%', paddingLeft: '10%', paddingRight: '10%' }}>
-                        {[...Array(9)].map((_, index) => (
-                          <div
-                            key={index}
-                            className="min-w-0 relative flex-shrink-0"
-                            onClick={selectedIndex === index ? handleScreenClick : undefined}
-                            onMouseDown={selectedIndex === index ? () => setIsCenterCardPressed(true) : undefined}
-                            onMouseUp={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
-                            onMouseLeave={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
-                            onTouchStart={selectedIndex === index ? () => setIsCenterCardPressed(true) : undefined}
-                            onTouchEnd={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
-                            style={{
-                              width: isSmallScreen ? '200px' : '246.15px',
-                              transform: selectedIndex === index ? 'scale3d(1.3, 1.3, 1)' : 'scale3d(0.9, 0.9, 1)',
-                              opacity: isCenterCardPressed && selectedIndex === index ? 0.6 : 1,
-                              zIndex: selectedIndex === index ? 10 : 1,
-                              marginLeft: index > 0 ? (isSmallScreen ? '-39px' : '-48px') : '0',
-                              transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.1s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                              willChange: 'transform',
-                              backfaceVisibility: 'hidden',
-                              WebkitBackfaceVisibility: 'hidden',
-                              cursor: selectedIndex === index ? 'pointer' : 'default',
-                            }}
-                          >
-                            <div className="relative w-full" style={{ width: '100%', height: 'auto' }}>
-                              <Image
-                                src="/card.jpg"
-                                alt="Card"
-                                width={1920}
-                                height={1080}
-                                className="w-full h-auto object-cover"
-                                style={{ width: '100%', height: 'auto', borderRadius: '10px' }}
-                                priority={index === 4}
-                                loading={index === 4 ? 'eager' : 'lazy'}
-                                unoptimized
-                              />
-                              {(() => {
-                                const scale = isSmallScreen ? 0.813 : 1;
-                                return (
-                                  <>
-                                    {uploadedImage && (
-                                      <img
-                                        src={uploadedImage}
-                                        alt="Uploaded"
-                                        style={{
-                                          position: 'absolute',
-                                          left: `${7.69 * scale}px`,
-                                          top: `${41.5 * scale}px`,
-                                          width: `${51.5 * scale}px`,
-                                          height: 'auto',
-                                          objectFit: 'contain',
-                                        }}
-                                      />
-                                    )}
-                                    {text1 && (
+                    {!isRefreshing ? (
+                      <div className="overflow-hidden" ref={emblaRef} style={{ paddingTop: '8%', paddingBottom: '8%' }}>
+                        <div className="flex" style={{ gap: '-20%', paddingLeft: '10%', paddingRight: '10%' }}>
+                          {[...Array(9)].map((_, index) => (
+                            <div
+                              key={index}
+                              className="min-w-0 relative flex-shrink-0"
+                              onClick={selectedIndex === index ? handleScreenClick : undefined}
+                              onMouseDown={selectedIndex === index ? () => setIsCenterCardPressed(true) : undefined}
+                              onMouseUp={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
+                              onMouseLeave={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
+                              onTouchStart={selectedIndex === index ? () => setIsCenterCardPressed(true) : undefined}
+                              onTouchEnd={selectedIndex === index ? () => setIsCenterCardPressed(false) : undefined}
+                              style={{
+                                width: isSmallScreen ? '200px' : '246.15px',
+                                transform: selectedIndex === index ? 'scale3d(1.3, 1.3, 1)' : 'scale3d(0.9, 0.9, 1)',
+                                opacity: isCenterCardPressed && selectedIndex === index ? 0.6 : 1,
+                                zIndex: selectedIndex === index ? 10 : 1,
+                                marginLeft: index > 0 ? (isSmallScreen ? '-39px' : '-48px') : '0',
+                                transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.1s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                willChange: 'transform',
+                                backfaceVisibility: 'hidden',
+                                WebkitBackfaceVisibility: 'hidden',
+                                cursor: selectedIndex === index ? 'pointer' : 'default',
+                              }}
+                            >
+                              <div className="relative w-full" style={{ width: '100%', height: 'auto' }}>
+                                <Image
+                                  src="/card.jpg"
+                                  alt="Card"
+                                  width={1920}
+                                  height={1080}
+                                  className="w-full h-auto object-cover"
+                                  style={{ width: '100%', height: 'auto', borderRadius: '10px' }}
+                                  priority={index === 4}
+                                  loading={index === 4 ? 'eager' : 'lazy'}
+                                  unoptimized
+                                />
+                                {(() => {
+                                  const scale = isSmallScreen ? 0.813 : 1;
+                                  return (
+                                    <>
+                                      {uploadedImage && (
+                                        <img
+                                          src={uploadedImage}
+                                          alt="Uploaded"
+                                          style={{
+                                            position: 'absolute',
+                                            left: `${7.69 * scale}px`,
+                                            top: `${41.5 * scale}px`,
+                                            width: `${51.5 * scale}px`,
+                                            height: 'auto',
+                                            objectFit: 'contain',
+                                          }}
+                                        />
+                                      )}
+                                      {text1 && (
+                                        <div
+                                          style={{
+                                            position: 'absolute',
+                                            left: `${68 * scale}px`,
+                                            top: `${38.43 * scale}px`,
+                                            color: '#000',
+                                            fontSize: `${6 * scale}px`,
+                                            fontFamily: 'Montserrat, sans-serif',
+                                            fontWeight: 350,
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {text1}
+                                        </div>
+                                      )}
+                                      {text2 && (
+                                        <div
+                                          style={{
+                                            position: 'absolute',
+                                            left: `${68 * scale}px`,
+                                            top: `${56.7 * scale}px`,
+                                            color: '#000',
+                                            fontSize: `${6 * scale}px`,
+                                            fontFamily: 'Montserrat, sans-serif',
+                                            fontWeight: 350,
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {text2}
+                                        </div>
+                                      )}
+                                      {text3 && (
+                                        <div
+                                          style={{
+                                            position: 'absolute',
+                                            left: `${68 * scale}px`,
+                                            top: `${75 * scale}px`,
+                                            color: '#000',
+                                            fontSize: `${6 * scale}px`,
+                                            fontFamily: 'Montserrat, sans-serif',
+                                            fontWeight: 350,
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {text3}
+                                        </div>
+                                      )}
+                                      {text4 && (
+                                        <div
+                                          style={{
+                                            position: 'absolute',
+                                            left: `${68 * scale}px`,
+                                            top: `${92.5 * scale}px`,
+                                            color: '#000',
+                                            fontSize: `${6 * scale}px`,
+                                            fontFamily: 'Montserrat, sans-serif',
+                                            fontWeight: 350,
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {text4}
+                                        </div>
+                                      )}
+                                      {text5 && (
+                                        <div
+                                          style={{
+                                            position: 'absolute',
+                                            left: `${68 * scale}px`,
+                                            top: `${119.13 * scale}px`,
+                                            color: '#000',
+                                            fontSize: `${6 * scale}px`,
+                                            fontFamily: 'Montserrat, sans-serif',
+                                            fontWeight: 350,
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {formatDate(text5)}
+                                        </div>
+                                      )}
                                       <div
                                         style={{
                                           position: 'absolute',
                                           left: `${68 * scale}px`,
-                                          top: `${38.43 * scale}px`,
+                                          top: `${136.04 * scale}px`,
                                           color: '#000',
                                           fontSize: `${6 * scale}px`,
                                           fontFamily: 'Montserrat, sans-serif',
@@ -964,95 +1025,36 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                                           whiteSpace: 'nowrap',
                                         }}
                                       >
-                                        {text1}
+                                        {text6}
                                       </div>
-                                    )}
-                                    {text2 && (
-                                      <div
-                                        style={{
-                                          position: 'absolute',
-                                          left: `${68 * scale}px`,
-                                          top: `${56.7 * scale}px`,
-                                          color: '#000',
-                                          fontSize: `${6 * scale}px`,
-                                          fontFamily: 'Montserrat, sans-serif',
-                                          fontWeight: 350,
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                      >
-                                        {text2}
-                                      </div>
-                                    )}
-                                    {text3 && (
-                                      <div
-                                        style={{
-                                          position: 'absolute',
-                                          left: `${68 * scale}px`,
-                                          top: `${75 * scale}px`,
-                                          color: '#000',
-                                          fontSize: `${6 * scale}px`,
-                                          fontFamily: 'Montserrat, sans-serif',
-                                          fontWeight: 350,
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                      >
-                                        {text3}
-                                      </div>
-                                    )}
-                                    {text4 && (
-                                      <div
-                                        style={{
-                                          position: 'absolute',
-                                          left: `${68 * scale}px`,
-                                          top: `${92.5 * scale}px`,
-                                          color: '#000',
-                                          fontSize: `${6 * scale}px`,
-                                          fontFamily: 'Montserrat, sans-serif',
-                                          fontWeight: 350,
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                      >
-                                        {text4}
-                                      </div>
-                                    )}
-                                    {text5 && (
-                                      <div
-                                        style={{
-                                          position: 'absolute',
-                                          left: `${68 * scale}px`,
-                                          top: `${119.13 * scale}px`,
-                                          color: '#000',
-                                          fontSize: `${6 * scale}px`,
-                                          fontFamily: 'Montserrat, sans-serif',
-                                          fontWeight: 350,
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                      >
-                                        {formatDate(text5)}
-                                      </div>
-                                    )}
-                                    <div
-                                      style={{
-                                        position: 'absolute',
-                                        left: `${68 * scale}px`,
-                                        top: `${136.04 * scale}px`,
-                                        color: '#000',
-                                        fontSize: `${6 * scale}px`,
-                                        fontFamily: 'Montserrat, sans-serif',
-                                        fontWeight: 350,
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {text6}
-                                    </div>
-                                  </>
-                                );
-                              })()}
+                                    </>
+                                  );
+                                })()}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      /* Loading circle replacing cards */
+                      <div className="flex items-center justify-center" style={{ minHeight: '300px' }}>
+                        <div className="bg-white/90 backdrop-blur-sm rounded-full shadow-xl p-4">
+                          <svg
+                            className="w-10 h-10 animate-spin"
+                            fill="none"
+                            stroke="#005fef"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2.5}
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 
@@ -1072,40 +1074,14 @@ export default function App({ currentPage, onNavigate }: AppProps) {
             </div>
           </div>
         </div>
-
-        {/* Loading overlay when refreshing - shows centered loading circle where cards were */}
-        {currentPage === 'profile' && isRefreshing && (
-          <div
-            className="fixed inset-0 z-20 flex items-center justify-center"
-            style={{
-              top: '40%',
-              pointerEvents: 'none',
-            }}
-          >
-            <div className="bg-white/90 backdrop-blur-sm rounded-full shadow-xl p-6">
-              <svg
-                className="w-12 h-12 animate-spin"
-                fill="none"
-                stroke="#005fef"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2.5}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-            </div>
-          </div>
-        )}
       </>
     );
   };
 
-  // Add keyframe animation for spinner
-  if (typeof document !== 'undefined') {
+  // Add keyframe animation
+  if (typeof document !== 'undefined' && !document.querySelector('#pull-to-refresh-styles')) {
     const style = document.createElement('style');
+    style.id = 'pull-to-refresh-styles';
     style.textContent = `
       @keyframes spin {
         from {
@@ -1119,10 +1095,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
         animation: spin 1s linear infinite;
       }
     `;
-    if (!document.querySelector('#pull-to-refresh-styles')) {
-      style.id = 'pull-to-refresh-styles';
-      document.head.appendChild(style);
-    }
+    document.head.appendChild(style);
   }
 
   return (
