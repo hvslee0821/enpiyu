@@ -66,10 +66,10 @@ export default function App({ currentPage, onNavigate }: AppProps) {
 
   // Pull to reload states
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [pullStartY, setPullStartY] = useState(0);
   const [pullProgress, setPullProgress] = useState(0);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const pullStartYRef = useRef(0); // Use ref instead of state variable
   const isDraggingRef = useRef(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const formatDate = (dateString: string): string => {
     if (!dateString) return '';
@@ -418,7 +418,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     const handleTouchStart = (e: TouchEvent) => {
       // Only trigger if at the top of the page and not already refreshing
       if (content.scrollTop === 0 && !isRefreshing) {
-        pullStartY = e.touches[0].clientY;
+        pullStartYRef.current = e.touches[0].clientY;
         isDraggingRef.current = true;
         setPullProgress(0);
       }
@@ -428,7 +428,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
       if (!isDraggingRef.current || isRefreshing) return;
       
       const currentY = e.touches[0].clientY;
-      const pullDistance = currentY - pullStartY;
+      const pullDistance = currentY - pullStartYRef.current;
       
       if (pullDistance > 0 && content.scrollTop === 0) {
         e.preventDefault();
