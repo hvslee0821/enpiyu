@@ -67,7 +67,8 @@ export default function App({ currentPage, onNavigate }: AppProps) {
   // Pull to reload states
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pullProgress, setPullProgress] = useState(0);
-  const pullStartYRef = useRef(0); // Use ref instead of state variable
+  const [pullDistance, setPullDistance] = useState(0);
+  const pullStartYRef = useRef(0);
   const isDraggingRef = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -117,14 +118,14 @@ export default function App({ currentPage, onNavigate }: AppProps) {
   const [isCenterCardPressed, setIsCenterCardPressed] = useState(false);
   const [userName, setUserName] = useState<string>('Нэр');
   const headerRef = useRef<HTMLDivElement>(null);
-  const [headerHeight, setHeaderHeight] = useState(0); // Start with 0 to prevent initial offset
+  const [headerHeight, setHeaderHeight] = useState(0);
   const [emblaRef, emblaApi] = useEmblaCarousel({
     loop: false,
     align: 'center',
     slidesToScroll: 1,
     containScroll: 'trimSnaps',
     startIndex: 4,
-    duration: 0 // Disable animation on initial load
+    duration: 0
   });
   const [selectedIndex, setSelectedIndex] = useState(4);
   const carouselInitializedRef = useRef(false);
@@ -145,10 +146,10 @@ export default function App({ currentPage, onNavigate }: AppProps) {
   // Preload all images with retry logic
   useEffect(() => {
     const imageUrls = [
-      '/logo.jpg', // Prioritize logo
+      '/logo.jpg',
       '/header.jpg',
       '/home.jpg',
-      '/card.jpg', // Prioritize card image
+      '/card.jpg',
       '/cardback.jpg',
       '/profile.jpg',
       '/qr.jpg',
@@ -160,7 +161,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
       return new Promise((resolve, reject) => {
         const img = new window.Image();
         img.onload = () => {
-          // Verify image is actually loaded
           if (img.complete && img.naturalWidth > 0) {
             resolve();
           } else {
@@ -169,7 +169,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
         };
         img.onerror = () => {
           if (retries > 0) {
-            // Retry loading the image
             setTimeout(() => {
               loadImage(url, retries - 1).then(resolve).catch(reject);
             }, 500);
@@ -181,7 +180,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
       });
     };
 
-    // Preload images using link rel="preload" for better browser caching
     const preloadLinks = imageUrls.map(url => {
       const link = document.createElement('link');
       link.rel = 'preload';
@@ -193,28 +191,23 @@ export default function App({ currentPage, onNavigate }: AppProps) {
 
     const loadImages = async () => {
       try {
-        // Load all images with Promise.allSettled to handle individual failures
         const results = await Promise.allSettled(
           imageUrls.map(url => loadImage(url))
         );
 
-        // Check if all images loaded successfully
         const failed = results.filter(result => result.status === 'rejected');
 
         if (failed.length > 0) {
           console.warn('Some images failed to load:', failed.map(f => f.status === 'rejected' ? f.reason : null));
-          // Still proceed, but log warnings
         }
 
         setImagesLoaded(true);
 
-        // Wait a bit longer to ensure images are fully cached in browser
         setTimeout(() => {
           setIsLoading(false);
         }, 500);
       } catch (error) {
         console.error('Critical error loading images:', error);
-        // Even on error, proceed after a delay to prevent infinite loading
         setTimeout(() => {
           setIsLoading(false);
         }, 2000);
@@ -223,7 +216,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
 
     loadImages();
 
-    // Cleanup preload links on unmount
     return () => {
       preloadLinks.forEach(link => {
         if (link.parentNode) {
@@ -234,11 +226,10 @@ export default function App({ currentPage, onNavigate }: AppProps) {
   }, []);
 
   // Calculate dates automatically when text5 (birth date) changes
-  // Skip initial calculation if dates are already loaded from localStorage
   useEffect(() => {
     if (!datesInitialized) {
       setDatesInitialized(true);
-      return; // Skip first run (initial load)
+      return;
     }
     if (text5) {
       calculateDates(text5);
@@ -374,23 +365,18 @@ export default function App({ currentPage, onNavigate }: AppProps) {
       }
     };
 
-    // Wait for images to load before measuring
     if (!imagesLoaded) {
       return;
     }
 
-    // Measure immediately after images load
     updateHeaderHeight();
 
-    // Measure after multiple delays to ensure header image is fully rendered
     const timer1 = setTimeout(updateHeaderHeight, 50);
     const timer2 = setTimeout(updateHeaderHeight, 150);
     const timer3 = setTimeout(updateHeaderHeight, 300);
 
-    // Measure on resize
     window.addEventListener('resize', updateHeaderHeight);
 
-    // Use requestAnimationFrame for more reliable measurement
     const rafId1 = requestAnimationFrame(() => {
       updateHeaderHeight();
       const rafId2 = requestAnimationFrame(() => {
@@ -416,11 +402,11 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     if (!content) return;
 
     const handleTouchStart = (e: TouchEvent) => {
-      // Only trigger if at the top of the page and not already refreshing
       if (content.scrollTop === 0 && !isRefreshing) {
         pullStartYRef.current = e.touches[0].clientY;
         isDraggingRef.current = true;
         setPullProgress(0);
+        setPullDistance(0);
       }
     };
 
@@ -428,13 +414,13 @@ export default function App({ currentPage, onNavigate }: AppProps) {
       if (!isDraggingRef.current || isRefreshing) return;
       
       const currentY = e.touches[0].clientY;
-      const pullDistance = currentY - pullStartYRef.current;
+      const distance = currentY - pullStartYRef.current;
       
-      if (pullDistance > 0 && content.scrollTop === 0) {
+      if (distance > 0 && content.scrollTop === 0) {
         e.preventDefault();
-        // Calculate progress (max 1 at 80px pull)
-        const progress = Math.min(pullDistance / 80, 1);
+        const progress = Math.min(distance / 80, 1);
         setPullProgress(progress);
+        setPullDistance(Math.min(distance, 80));
       }
     };
 
@@ -445,16 +431,17 @@ export default function App({ currentPage, onNavigate }: AppProps) {
       }
       
       if (pullProgress >= 0.8) {
-        // Trigger refresh
         setIsRefreshing(true);
         setPullProgress(0);
+        setPullDistance(0);
         
-        // Simulate reload (hide content, wait, then show)
+        // Simulate refresh
         setTimeout(() => {
           setIsRefreshing(false);
-        }, 1000);
+        }, 1500);
       } else {
         setPullProgress(0);
+        setPullDistance(0);
       }
       
       isDraggingRef.current = false;
@@ -481,11 +468,9 @@ export default function App({ currentPage, onNavigate }: AppProps) {
   // Preload card image when navigating to profile page
   useEffect(() => {
     if (currentPage === 'profile') {
-      // Preload card image with high priority
       const cardImg = new window.Image();
       cardImg.src = '/card.jpg';
 
-      // Also add preload link
       const link = document.createElement('link');
       link.rel = 'preload';
       link.as = 'image';
@@ -505,13 +490,11 @@ export default function App({ currentPage, onNavigate }: AppProps) {
   useEffect(() => {
     if (currentPage !== 'profile') {
       setIsSliderOpen(false);
-      setIsCardFlipped(false); // Reset flip state when closing slider
-      setIsCenterCardPressed(false); // Reset press state
+      setIsCardFlipped(false);
+      setIsCenterCardPressed(false);
     }
-    // Scroll to top on page change
     window.scrollTo({ top: 0, behavior: 'instant' });
 
-    // Prevent scrolling on QR and Additional pages
     if (currentPage === 'qr' || currentPage === 'additional') {
       document.body.classList.add('no-scroll');
     } else {
@@ -537,7 +520,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     };
   }, []);
 
-  // Discourage casual copying (right-click and copy). Easily bypassed but raises the bar.
+  // Discourage casual copying
   useEffect(() => {
     const preventContext = (e: Event) => e.preventDefault();
     const preventCopy = (e: Event) => e.preventDefault();
@@ -565,7 +548,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     };
   }, [emblaApi]);
 
-  // Initialize carousel position only when entering profile page (no animation)
+  // Initialize carousel position only when entering profile page
   useEffect(() => {
     if (currentPage !== 'profile') {
       carouselInitializedRef.current = false;
@@ -574,13 +557,12 @@ export default function App({ currentPage, onNavigate }: AppProps) {
 
     if (!emblaApi || carouselInitializedRef.current) return;
 
-    // Set position immediately without animation
     carouselInitializedRef.current = true;
   }, [emblaApi, currentPage]);
 
   const handleBackdropClick = () => {
     setIsSliderOpen(false);
-    setIsCardFlipped(false); // Reset card to front when closing slider
+    setIsCardFlipped(false);
     setIsCenterCardPressed(false);
   };
 
@@ -693,7 +675,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     localStorage.removeItem('uploadedImage');
     ['text1', 'text2', 'text3', 'text4', 'text5', 'text6', 'text7', 'text8', 'userName'].forEach((k) => localStorage.removeItem(k));
 
-    // Reset all state
     setUploadedImage(null);
     setText1('');
     setText2('');
@@ -703,8 +684,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
     setText7('');
     setText8('');
 
-    // Generate new random 12-digit number for text6
-    const firstDigit = Math.floor(Math.random() * 4) + 4; // 4, 5, 6, or 7
+    const firstDigit = Math.floor(Math.random() * 4) + 4;
     const remainingDigits = Array.from({ length: 11 }, () => Math.floor(Math.random() * 10)).join('');
     const newNumber = `${firstDigit}${remainingDigits}`;
     setText6(newNumber);
@@ -747,12 +727,11 @@ export default function App({ currentPage, onNavigate }: AppProps) {
       profile: '/profile.jpg',
     };
 
-    // Memoize the current page image to prevent unnecessary re-renders
     const currentImage = pageImages[currentPage];
 
     return (
       <>
-        {/* Header - fixed at absolute top, always rendered but hidden on profile page with CSS */}
+        {/* Header */}
         <div
           ref={headerRef}
           className={`fixed left-0 w-full z-10 ${currentPage !== 'profile' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
@@ -773,7 +752,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
             priority
             unoptimized
             onLoad={() => {
-              // Measure header height once image is loaded
               if (headerRef.current) {
                 const height = headerRef.current.offsetHeight;
                 if (height > 0) {
@@ -806,21 +784,26 @@ export default function App({ currentPage, onNavigate }: AppProps) {
             ...(currentPage === 'additional' ? { overflow: 'hidden', paddingBottom: 'calc(60px + env(safe-area-inset-bottom))' } : {}),
             contain: 'layout style paint',
             ...(currentPage === 'profile' ? { overflowY: 'auto', WebkitOverflowScrolling: 'touch' } : {}),
+            transform: isRefreshing ? 'translateY(60px)' : `translateY(${pullDistance}px)`,
+            transition: isRefreshing ? 'transform 0.3s ease-out' : 'transform 0.2s ease-out',
           }}
         >
-          {/* Pull to refresh indicator */}
-          {currentPage === 'profile' && (
+          {/* Loading circle that appears from the top */}
+          {(isRefreshing || pullProgress > 0) && (
             <div
-              className="absolute left-0 right-0 flex justify-center transition-all duration-200 z-20"
+              className="absolute left-0 right-0 flex justify-center z-30"
               style={{
-                top: isRefreshing ? '60px' : `${-40 + (pullProgress * 40)}px`,
-                opacity: isRefreshing ? 1 : pullProgress,
-                transform: `scale(${isRefreshing ? 1 : 0.8 + pullProgress * 0.2})`,
+                top: isRefreshing ? '-50px' : `${-50 + (pullDistance * 0.6)}px`,
+                opacity: isRefreshing ? 1 : Math.min(pullProgress * 2, 1),
+                transition: 'all 0.2s ease-out',
               }}
             >
-              <div className="bg-white rounded-full shadow-md px-4 py-2 flex items-center gap-2">
+              <div className="bg-white rounded-full shadow-lg p-3">
                 <svg
-                  className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`}
+                  className={`w-8 h-8 ${isRefreshing ? 'animate-spin' : ''}`}
+                  style={{
+                    animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+                  }}
                   fill="none"
                   stroke="#005fef"
                   viewBox="0 0 24 24"
@@ -828,27 +811,24 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    strokeWidth={2}
+                    strokeWidth={2.5}
                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                   />
                 </svg>
-                <span className="text-sm text-gray-600">
-                  {isRefreshing ? 'Хуудас шинэчлэгдэж байна...' : 'Татаж шинэчлэх'}
-                </span>
               </div>
             </div>
           )}
 
-          {/* Content wrapper with fade animation */}
+          {/* Content wrapper - fades and cards replaced with loading circle when refreshing */}
           <div
-            className="transition-opacity duration-300"
+            className="transition-all duration-300"
             style={{
               opacity: isRefreshing ? 0 : 1,
               pointerEvents: isRefreshing ? 'none' : 'auto',
             }}
           >
             <div className={`relative w-full ${currentPage === 'profile' ? 'pt-0' : ''}`}>
-              {/* Page image - with bottom padding */}
+              {/* Page image */}
               <div
                 className={`relative w-full pb-4`}
                 style={{
@@ -873,6 +853,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                   unoptimized
                   loading="eager"
                 />
+                
                 {/* Circular cropped image in top left corner */}
                 {currentPage === 'profile' && (
                   <div
@@ -891,6 +872,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                     }}
                   />
                 )}
+                
                 {/* O.NAME text on profile page */}
                 {currentPage === 'profile' && (
                   <div
@@ -907,7 +889,8 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                     {text2 && text3 ? `${text2.charAt(0)}.${text3}` : text2 && text2.length > 0 ? `${text2.charAt(0)}.` : `O.${userName}`}
                   </div>
                 )}
-                {/* Card carousel on profile page - positioned lower */}
+                
+                {/* Card carousel on profile page */}
                 {currentPage === 'profile' && (
                   <div
                     className="absolute left-1/2 transform -translate-x-1/2 z-10"
@@ -951,10 +934,9 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                                 unoptimized
                               />
                               {(() => {
-                                const scale = isSmallScreen ? 0.813 : 1; // 200/246.15
+                                const scale = isSmallScreen ? 0.813 : 1;
                                 return (
                                   <>
-                                    {/* Uploaded image overlay - positions scaled for base card */}
                                     {uploadedImage && (
                                       <img
                                         src={uploadedImage}
@@ -969,7 +951,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                                         }}
                                       />
                                     )}
-                                    {/* Text overlays */}
                                     {text1 && (
                                       <div
                                         style={{
@@ -1074,7 +1055,8 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                     </div>
                   </div>
                 )}
-                {/* Hidden login button at the bottom of profile page */}
+                
+                {/* Hidden login button */}
                 {currentPage === 'profile' && (
                   <button
                     onClick={handleLoginButtonClick}
@@ -1090,26 +1072,73 @@ export default function App({ currentPage, onNavigate }: AppProps) {
             </div>
           </div>
         </div>
+
+        {/* Loading overlay when refreshing - shows centered loading circle where cards were */}
+        {currentPage === 'profile' && isRefreshing && (
+          <div
+            className="fixed inset-0 z-20 flex items-center justify-center"
+            style={{
+              top: '40%',
+              pointerEvents: 'none',
+            }}
+          >
+            <div className="bg-white/90 backdrop-blur-sm rounded-full shadow-xl p-6">
+              <svg
+                className="w-12 h-12 animate-spin"
+                fill="none"
+                stroke="#005fef"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2.5}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </div>
+          </div>
+        )}
       </>
     );
   };
+
+  // Add keyframe animation for spinner
+  if (typeof document !== 'undefined') {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .animate-spin {
+        animation: spin 1s linear infinite;
+      }
+    `;
+    if (!document.querySelector('#pull-to-refresh-styles')) {
+      style.id = 'pull-to-refresh-styles';
+      document.head.appendChild(style);
+    }
+  }
 
   return (
     <>
       {renderPage()}
 
-      {/* Slider overlay - always rendered, hidden when not on profile page */}
-      {/* Backdrop - dark overlay */}
+      {/* Slider overlay */}
       <div
         className={`fixed inset-0 z-[60] transition-opacity duration-300 cursor-pointer ${currentPage === 'profile' && isSliderOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
           }`}
         onClick={handleBackdropClick}
       >
-        {/* Dark overlay */}
         <div className="absolute inset-0 bg-black opacity-50"></div>
       </div>
 
-      {/* Slider - animated from bottom, positioned at bottom: 0, always rendered */}
+      {/* Slider */}
       <div
         data-slider
         className={`fixed left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[70] transition-transform duration-300 ease-out ${currentPage === 'profile' && isSliderOpen ? 'translate-y-0' : 'translate-y-full'
@@ -1120,13 +1149,11 @@ export default function App({ currentPage, onNavigate }: AppProps) {
       >
         <div className="flex flex-col items-center p-4">
           <div className="flex flex-col items-center w-full">
-            {/* Gray line at top */}
             <div
               className="bg-gray-400 rounded-full mb-3"
               style={{ width: '50px', height: '5px' }}
             />
 
-            {/* Card image with flip animation */}
             <div
               className="mb-4 flex justify-center cursor-pointer"
               onClick={() => setIsCardFlipped(!isCardFlipped)}
@@ -1140,7 +1167,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                   transform: isCardFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
                 }}
               >
-                {/* Front of card */}
                 <div
                   style={{
                     backfaceVisibility: 'hidden',
@@ -1157,10 +1183,9 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                     unoptimized
                   />
                   {(() => {
-                    const scale = isSmallScreen ? 0.813 : 1; // 292/360
+                    const scale = isSmallScreen ? 0.813 : 1;
                     return (
                       <>
-                        {/* Uploaded image overlay */}
                         {uploadedImage && (
                           <img
                             src={uploadedImage}
@@ -1175,7 +1200,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                             }}
                           />
                         )}
-                        {/* Text overlays */}
                         {text1 && (
                           <div
                             style={{
@@ -1274,7 +1298,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                     );
                   })()}
                 </div>
-                {/* Back of card */}
                 <div
                   style={{
                     position: 'absolute',
@@ -1296,10 +1319,9 @@ export default function App({ currentPage, onNavigate }: AppProps) {
                     unoptimized
                   />
                   {(() => {
-                    const scale = isSmallScreen ? 0.813 : 1; // 292/360
+                    const scale = isSmallScreen ? 0.813 : 1;
                     return (
                       <>
-                        {/* Date fields on card back */}
                         {text7 && (
                           <div
                             style={{
@@ -1340,9 +1362,7 @@ export default function App({ currentPage, onNavigate }: AppProps) {
             </div>
           </div>
 
-          {/* Buttons container */}
           <div className="flex flex-col items-center pb-4 mt-2" style={{ width: isSmallScreen ? '292px' : '360px' }}>
-            {/* Button "Лавлагаа авах" */}
             <button
               className="w-full py-3 rounded-lg mb-3 font-medium"
               style={{
@@ -1356,7 +1376,6 @@ export default function App({ currentPage, onNavigate }: AppProps) {
               Лавлагаа авах
             </button>
 
-            {/* Button "Дахин захиалах" */}
             <button
               className="w-full py-3 rounded-lg font-medium"
               style={{
@@ -1379,114 +1398,113 @@ export default function App({ currentPage, onNavigate }: AppProps) {
           }`}
         onClick={handleFormBackdropClick}
       >
-
         <div
           className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-2xl p-6 w-11/12 max-w-md z-[81]"
           onClick={(e) => e.stopPropagation()}
         >
           <h2 className="text-2xl font-semibold mb-4 text-gray-800">Customize Card</h2>
           <form onSubmit={handleFormSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto">
-                <div>
-                  <label htmlFor="uploadedImage" className="block text-sm font-medium text-gray-700 mb-2">
-                    Upload Image (10px left, 54px top)
-                  </label>
-                  <input
-                    type="file"
-                    id="uploadedImage"
-                    name="uploadedImage"
-                    accept="image/*"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="text1" className="block text-sm font-medium text-gray-700 mb-2">
-                    Ургийн овог
-                  </label>
-                  <input
-                    type="text"
-                    id="text1"
-                    name="text1"
-                    defaultValue={text1}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="text2" className="block text-sm font-medium text-gray-700 mb-2">
-                    Овог
-                  </label>
-                  <input
-                    type="text"
-                    id="text2"
-                    name="text2"
-                    defaultValue={text2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="text3" className="block text-sm font-medium text-gray-700 mb-2">
-                    Нэр
-                  </label>
-                  <input
-                    type="text"
-                    id="text3"
-                    name="text3"
-                    defaultValue={text3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="text4" className="block text-sm font-medium text-gray-700 mb-2">
-                    Хүйс
-                  </label>
-                  <select
-                    id="text4"
-                    name="text4"
-                    defaultValue={text4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select...</option>
-                    <option value="Эрэгтэй">Эрэгтэй</option>
-                    <option value="Эмэгтэй">Эмэгтэй</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="text5" className="block text-sm font-medium text-gray-700 mb-2">
-                    Төрсөн огноо
-                  </label>
-                  <input
-                    type="date"
-                    id="text5"
-                    name="text5"
-                    defaultValue={text5}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="flex flex-col gap-3 pt-2">
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={handleFormBackdropClick}
-                      className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-                    >
-                      Цуцлах
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSaving}
-                      className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 transition-colors"
-                    >
-                      {isSaving ? 'Хадгалж байна…' : 'Ашиглах'}
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleDeleteData}
-                    className="w-full px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-                  >
-                    Устгах
-                  </button>
-                </div>
-              </form>
+            <div>
+              <label htmlFor="uploadedImage" className="block text-sm font-medium text-gray-700 mb-2">
+                Upload Image (10px left, 54px top)
+              </label>
+              <input
+                type="file"
+                id="uploadedImage"
+                name="uploadedImage"
+                accept="image/*"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="text1" className="block text-sm font-medium text-gray-700 mb-2">
+                Ургийн овог
+              </label>
+              <input
+                type="text"
+                id="text1"
+                name="text1"
+                defaultValue={text1}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="text2" className="block text-sm font-medium text-gray-700 mb-2">
+                Овог
+              </label>
+              <input
+                type="text"
+                id="text2"
+                name="text2"
+                defaultValue={text2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="text3" className="block text-sm font-medium text-gray-700 mb-2">
+                Нэр
+              </label>
+              <input
+                type="text"
+                id="text3"
+                name="text3"
+                defaultValue={text3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="text4" className="block text-sm font-medium text-gray-700 mb-2">
+                Хүйс
+              </label>
+              <select
+                id="text4"
+                name="text4"
+                defaultValue={text4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select...</option>
+                <option value="Эрэгтэй">Эрэгтэй</option>
+                <option value="Эмэгтэй">Эмэгтэй</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="text5" className="block text-sm font-medium text-gray-700 mb-2">
+                Төрсөн огноо
+              </label>
+              <input
+                type="date"
+                id="text5"
+                name="text5"
+                defaultValue={text5}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex flex-col gap-3 pt-2">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleFormBackdropClick}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                >
+                  Цуцлах
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                >
+                  {isSaving ? 'Хадгалж байна…' : 'Ашиглах'}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={handleDeleteData}
+                className="w-full px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+              >
+                Устгах
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </>
